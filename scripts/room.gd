@@ -31,8 +31,10 @@ const ADAPTIVE_DESCS := {
 
 var index := 0
 var enemies: Array = []
-## Non-"" for the two story room types: "recovery" (light fight, no traps,
-## pays reconstruction on clear) and "memory" (the Arena shows a fragment).
+## Resolved room label (see RoomManager.kind_for): "combat", "elite",
+## "upgrade", "adaptive", "recovery", "memory", "milestone", "boss" or
+## "defect". Drives the floor markers, trap/enemy budget and the recovery
+## payout; the HUD tag comes from kind_for() so both stay identical.
 var kind := ""
 var is_cleared := false
 var challenge: int = Challenge.NONE
@@ -75,6 +77,22 @@ func build(room_index: int, player: Node3D, cfg: Dictionary = {}) -> void:
 	challenge = int(cfg.get("challenge", Challenge.NONE))
 	adaptive = str(cfg.get("adaptive", ""))
 	is_boss_room = bool(cfg.get("boss", false))
+	# The schedule hands us a resolved label (see RoomManager.kind_for); this
+	# fallback only covers hand-built rooms (tools, tests) with a bare cfg.
+	kind = str(cfg.get("kind", ""))
+	if kind == "":
+		if is_boss_room:
+			kind = "boss"
+		elif challenge == Challenge.ELITE_TRIAL:
+			kind = "elite"
+		elif challenge == Challenge.VAULT:
+			kind = "upgrade"
+		elif adaptive != "":
+			kind = "adaptive"
+		elif index > 0 and index % GameManager.REALM_LENGTH == 0:
+			kind = "milestone"
+		else:
+			kind = "combat"
 	palette = Content.room_palette(GameManager.realm_of_room(index),
 		index * 7919 + 13)
 
@@ -94,7 +112,7 @@ func challenge_name() -> String:
 		Challenge.ELITE_TRIAL:
 			return "ELITE TRIAL"
 		Challenge.VAULT:
-			return "REWARD VAULT"
+			return "UPGRADE CACHE"
 	return ""
 
 
@@ -283,12 +301,14 @@ func _build_decor() -> void:
 		_build_challenge_marker()
 	elif adaptive != "":
 		_build_adaptive_marker()
+	elif kind == "recovery":
+		_build_ring_marker(Color(0.4, 1.0, 0.68))
+	elif kind == "memory":
+		_build_ring_marker(Color(0.72, 0.5, 1.0))
 
 
-## A cyan ring + cool beacon: the adaptive test reads as "the system is
-## watching this one" rather than the gold/violet of a reward challenge.
-func _build_adaptive_marker() -> void:
-	var col := Color(0.35, 0.85, 1.0)
+## Shared floor ring + beacon so any special room reads at a glance.
+func _build_ring_marker(col: Color) -> void:
 	var ring := MeshInstance3D.new()
 	var torus := TorusMesh.new()
 	torus.inner_radius = 3.0
@@ -309,34 +329,24 @@ func _build_adaptive_marker() -> void:
 	add_child(beacon)
 
 
+## A cyan ring + cool beacon: the adaptive test reads as "the system is
+## watching this one" rather than the gold/violet of a reward challenge.
+func _build_adaptive_marker() -> void:
+	_build_ring_marker(Color(0.35, 0.85, 1.0))
+
+
 ## A floor ring + banner light so a challenge room is obvious at a glance.
 func _build_challenge_marker() -> void:
 	var gold := challenge == Challenge.VAULT
-	var col := Color(1.0, 0.85, 0.3) if gold else Color(0.9, 0.25, 0.95)
-	var ring := MeshInstance3D.new()
-	var torus := TorusMesh.new()
-	torus.inner_radius = 3.0
-	torus.outer_radius = 3.35
-	ring.mesh = torus
-	var m := Util.make_material(col, 0.3, 0.0, col, 3.0)
-	ring.material_override = m
-	ring.position = Vector3(0, 0.08, 0)
-	ring.rotation.x = PI / 2.0
-	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(ring)
-
-	var beacon := OmniLight3D.new()
-	beacon.position = Vector3(0, 2.2, 0)
-	beacon.omni_range = 14.0
-	beacon.light_color = col
-	beacon.light_energy = 1.6
-	beacon.shadow_enabled = false
-	add_child(beacon)
+	_build_ring_marker(Color(1.0, 0.85, 0.3) if gold else Color(0.9, 0.25, 0.95))
 
 
 # ------------------------------------------------------------- spawning -----
 
 func _spawn_traps() -> void:
+	# A recovery bay is where you catch your breath - no spikes in there.
+	if kind == "recovery":
+		return
 	var count := clampi(1 + index / 3, 1, 5)
 	if GameManager.difficulty >= GameManager.Difficulty.HARD:
 		count += 1
@@ -391,6 +401,9 @@ func _spawn_enemies() -> void:
 			count = maxi(3, count - 1)
 		Challenge.VAULT:
 			count = maxi(1, count - 2)
+	# Recovery is a breather: half the fight, never zero (0 would soft-lock).
+	if kind == "recovery":
+		count = maxi(1, count / 2)
 
 	for i in count:
 		var t := _pick_adaptive_type() if adaptive != "" else _pick_type()

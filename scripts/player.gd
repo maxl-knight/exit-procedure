@@ -92,7 +92,8 @@ var stats: Dictionary = {}
 var health: Health
 var camera: CameraRig
 
-## Stacking run upgrades (8 kinds) and the curses that never wear off (10 kinds).
+## Stacking run upgrades (8 kinds) and the System Defects that never wear
+## off (10 kinds).
 var buffs: Dictionary = {}
 var curses: Array[String] = []
 

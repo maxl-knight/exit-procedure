@@ -22,6 +22,7 @@ var pause_menu: PauseMenu
 var game_over: GameOverScreen
 var choice: ChoiceScreen
 var victory: VictoryScreen
+var ending: EndingChoice
 
 var boss: TheCreator
 var _env: Environment
@@ -73,6 +74,10 @@ func _ready() -> void:
 	victory.descend.connect(_on_descend)
 	victory.to_menu.connect(go_menu)
 	ui.add_child(victory)
+
+	ending = EndingChoice.new()
+	ending.chosen.connect(_on_ending_chosen)
+	ui.add_child(ending)
 
 	player.died.connect(_on_player_died)
 	ArenaMemory.voice.connect(_on_arena_voice)
@@ -143,6 +148,10 @@ func _on_room_entered(index: int) -> void:
 	GameManager.reset_room_stats()
 	player.arena_heal_mult = 1.0
 	hud.current_room = index
+	var room := room_manager.room_at(index)
+	# The HUD always shows what kind of room this is, even if the banner
+	# gets stolen by something louder (defect, boss).
+	hud.set_room_kind(room_manager.kind_for(index))
 
 	var realm := GameManager.realm_of_room(index)
 	var realm_changed := realm != _realm
@@ -156,19 +165,18 @@ func _on_room_entered(index: int) -> void:
 	if state != State.PLAYING:
 		return
 
-	# A curse is the loudest thing that can happen to you - say it plainly.
+	# A defect is the loudest thing that can happen to you - say it plainly.
 	if room_manager.is_curse_room(index):
 		var id := player.apply_random_curse()
 		var data: Dictionary = Content.CURSES.get(id, {})
 		var curse_name := str(data.get("name", id)).to_upper()
 		var desc := str(data.get("desc", ""))
-		hud.show_banner("YOU HAVE BEEN CURSED BY A DEBUFF\n%s  -  %s" % [curse_name, desc],
+		hud.show_banner("SYSTEM DEFECT INSTALLED\n%s  -  %s" % [curse_name, desc],
 			Color(0.9, 0.3, 0.9), 5.0)
 		return
 
-	var room := room_manager.room_at(index)
 	if room != null and room.is_boss_room:
-		hud.show_banner("THE THRONE OF HEAVEN", Color(1.0, 0.9, 0.5), 3.0)
+		hud.show_banner("THE CORE PERIMETER", Color(1.0, 0.9, 0.5), 3.0)
 		return
 	if room != null and room.challenge != Room.Challenge.NONE:
 		hud.show_banner(room.challenge_name(),
@@ -177,6 +185,14 @@ func _on_room_entered(index: int) -> void:
 		return
 	if room != null and room.adaptive != "":
 		_enter_adaptive(room)
+		return
+	if room != null and room.kind == "recovery":
+		hud.show_banner("RECOVERY BAY\nClear the room to be reconstructed",
+			Color(0.4, 1.0, 0.68), 3.2)
+		return
+	if room != null and room.kind == "memory":
+		hud.show_banner("MEMORY ROOM", Color(0.72, 0.5, 1.0), 2.4)
+		ArenaMemory.speak_fragment()
 		return
 	if realm_changed:
 		hud.show_banner("ENTERING  %s" % GameManager.REALM_NAMES[realm],
@@ -204,7 +220,7 @@ func _on_room_cleared(index: int) -> void:
 			if title != "":
 				title += "   +   "
 			title += str(d.get("name", id))
-		hud.show_banner("REWARD VAULT\n%s" % title.to_upper(),
+		hud.show_banner("UPGRADE CACHE\n%s" % title.to_upper(),
 			Color(1.0, 0.85, 0.3), 3.2)
 		return
 
@@ -218,8 +234,16 @@ func _on_room_cleared(index: int) -> void:
 		if room.adaptive == "heal":
 			# The Arena concedes the point: reconstruction works again.
 			player.health.heal(player.max_health_now() * 0.3)
-		_open_choice("SIMULATION CLEARED", "Your habit cost you - take a reward",
-			Content.random_buffs(3))
+		# The reward always counters the tested habit: proof the test had a point.
+		_open_choice("SIMULATION CLEARED", "Your habit cost you - take the counter",
+			Content.counter_options(room.adaptive, 3))
+		return
+
+	if room.kind == "recovery":
+		# Reconstruction runs hot in here: 35% of max back on clear.
+		player.health.heal(player.max_health_now() * 0.35)
+		hud.show_banner("RECONSTRUCTION COMPLETE\n+35% health",
+			Color(0.4, 1.0, 0.68), 2.6)
 		return
 
 	hud.show_banner("Room %d cleared" % (index + 1), Color(0.4, 1.0, 0.55), 1.7)
@@ -276,7 +300,10 @@ func _spawn_boss(index: int) -> void:
 	hud.watch_boss(boss)
 	get_tree().create_timer(0.3).timeout.connect(func():
 		if hud != null:
-			hud.show_banner("THE CREATOR", Color(1.0, 0.9, 0.5), 3.0))
+			hud.show_banner("THE CORE", Color(1.0, 0.9, 0.5), 3.0)
+		# The Core has watched every reconstruction: it opens with whatever
+		# your death count has earned you.
+		ArenaMemory.speak_boss())
 
 
 func _on_boss_died() -> void:
@@ -286,6 +313,17 @@ func _on_boss_died() -> void:
 	GameManager.beat_game()
 	ArenaMemory.note_boss()
 	state = State.VICTORY
+	if GameManager.endless:
+		# Already took the chair once - no more doors to choose.
+		victory.show_stats()
+		return
+	# First clear: the record opens three doors, right here in the arena.
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	ending.open()
+
+
+func _on_ending_chosen(id: String) -> void:
+	GameManager.apply_ending(id)
 	victory.show_stats()
 
 
@@ -300,7 +338,8 @@ func _on_descend() -> void:
 	state = State.PLAYING
 	_boss_started = false
 	room_manager.descend()
-	hud.show_banner("YOU FALL FROM HEAVEN INTO HELL", Color(1.0, 0.3, 0.2), 3.4)
+	hud.show_banner("YOU BREAK CONTAINMENT\nthe wings open below you",
+		Color(1.0, 0.3, 0.2), 3.4)
 
 
 # -------------------------------------------------------------- control -----

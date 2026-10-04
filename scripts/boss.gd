@@ -4,8 +4,10 @@ extends CharacterBody3D
 signal died
 signal phase_changed(label: String, detail: String)
 
-## The final boss at the end of Heaven. He is untouchable while his summons
-## live - kill them all and he drops his guard long enough to be hurt.
+## The Arena's central intelligence, waiting at the top of the Core Perimeter.
+## It is untouchable while its summons live - kill them all and it drops its
+## guard long enough to be hurt. It has watched every reconstruction, so it
+## opens with a line built from how many times you have already died.
 
 enum S { INTRO, SUMMON, STUN, PHASE2_INTRO, CLONE, FINAL, DEAD }
 
@@ -48,7 +50,7 @@ func _ready() -> void:
 	add_child(_collision)
 
 	_build_visual()
-	_emit_phase("THE CREATOR", "Defeat his summons to break his guard")
+	_emit_phase("THE CORE", "Kill its summons to break its guard")
 
 
 func _build_visual() -> void:
@@ -144,7 +146,7 @@ func _physics_process(delta: float) -> void:
 				clone = null
 				invulnerable = false
 				state = S.FINAL
-				_emit_phase("THE CREATOR IS EXPOSED", "Finish him")
+				_emit_phase("THE CORE IS EXPOSED", "Finish it")
 		S.FINAL:
 			pass
 
@@ -197,7 +199,7 @@ func is_vulnerable() -> bool:
 func state_label() -> String:
 	match state:
 		S.INTRO:
-			return "THE CREATOR"
+			return "THE CORE"
 		S.SUMMON:
 			return "SUMMONING"
 		S.STUN:
@@ -233,7 +235,7 @@ func _start_summon() -> void:
 	invulnerable = true
 	_visual.rotation.z = 0.0
 	_shoot_cd = 1.6
-	_emit_phase("THE CREATOR", "Invincible - defeat his summons")
+	_emit_phase("THE CORE", "Invincible - kill its summons")
 	var n := 3 + stuns_done
 	_add_count = n
 	for i in n:
@@ -299,7 +301,7 @@ func _enter_stun() -> void:
 	state = S.STUN
 	invulnerable = false
 	state_timer = STUN_TIME
-	_emit_phase("THE CREATOR IS STUNNED", "Hit him now - %.0fs" % STUN_TIME)
+	_emit_phase("THE CORE IS STUNNED", "Hit it now - %.0fs" % STUN_TIME)
 	FX.ring(get_tree().current_scene, global_position + Vector3(0, 0.2, 0),
 		Color(1.0, 0.85, 0.35), 7.0, 0.6)
 	FX.burst(get_tree().current_scene, global_position + Vector3(0, 3.0, 0),
@@ -311,7 +313,7 @@ func _enter_phase2() -> void:
 	invulnerable = true
 	state_timer = 2.2
 	_visual.rotation.z = 0.0
-	_emit_phase("PHASE II", "He sends your mirror against you")
+	_emit_phase("PHASE II", "It built a copy of your combat record")
 	FX.burst(get_tree().current_scene, global_position + Vector3(0, 3.5, 0),
 		Color(1.0, 0.3, 0.6), 120, 0.2, 1.0, 16.0)
 
@@ -328,7 +330,7 @@ func _spawn_clone() -> void:
 	clone.global_position = target.global_position + offset
 	if clone.global_position.y < 0.05:
 		clone.global_position.y = 0.05
-	_emit_phase("THE CLONE", "Same health. Same moves. Beat it.")
+	_emit_phase("THE CLONE", "Your record, walking. Same health, same moves.")
 	FX.burst(get_tree().current_scene, clone.global_position + Vector3(0, 1.0, 0),
 		Color(1.0, 0.3, 0.6), 60, 0.16, 0.7, 9.0)
 

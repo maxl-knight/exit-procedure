@@ -17,6 +17,7 @@ var _kills_label: Label
 var _room_label: Label
 var _left_label: Label
 var _realm_label: Label
+var _kind_label: Label
 var _score_label: Label
 var _slots: Array = []
 var _ability_root: Control
@@ -40,6 +41,22 @@ var _boss_label: Label
 var _boss_detail: Label
 var _boss_watch: TheCreator = null
 var current_room := 0
+## What kind of room the player is standing in, set on entry by game.gd.
+var room_kind := "combat"
+
+
+## Display text + colour for each room type the schedule can produce.
+const KIND_STYLE := {
+	"combat": {"text": "COMBAT", "color": Color(0.6, 0.7, 0.85)},
+	"elite": {"text": "ELITE TRIAL", "color": Color(0.9, 0.25, 0.95)},
+	"upgrade": {"text": "UPGRADE CACHE", "color": Color(1.0, 0.85, 0.3)},
+	"recovery": {"text": "RECOVERY BAY", "color": Color(0.4, 1.0, 0.68)},
+	"memory": {"text": "MEMORY ROOM", "color": Color(0.72, 0.5, 1.0)},
+	"adaptive": {"text": "ADAPTIVE TEST", "color": Color(0.35, 0.85, 1.0)},
+	"milestone": {"text": "MILESTONE", "color": Color(1.0, 0.9, 0.5)},
+	"boss": {"text": "BOSS ROOM", "color": Color(1.0, 0.9, 0.5)},
+	"defect": {"text": "SYSTEM DEFECT", "color": Color(0.9, 0.3, 0.9)},
+}
 
 
 func setup(p: Player) -> void:
@@ -167,7 +184,8 @@ func _update_status() -> void:
 		if n <= 0:
 			continue
 		var data: Dictionary = Content.BUFFS[id]
-		var l := _label(_status_col, "%s  x%d" % [str(data["name"]).to_upper(), n],
+		# Lore names are long - the side panel shows the short tag.
+		var l := _label(_status_col, "%s  x%d" % [str(data.get("short", data["name"])).to_upper(), n],
 			14, data["color"], HORIZONTAL_ALIGNMENT_LEFT)
 		l.add_theme_constant_override("outline_size", 5)
 		l.add_theme_color_override("font_outline_color", Color(0, 0, 0))
@@ -181,10 +199,20 @@ func _update_status() -> void:
 			continue
 		var data: Dictionary = Content.CURSES[id]
 		var suffix := "" if n == 1 else "  x%d" % n
-		var l := _label(_status_col, "CURSE  %s%s" % [str(data["name"]).to_upper(), suffix],
+		var l := _label(_status_col, "DEFECT  %s%s" % [str(data["name"]).to_upper(), suffix],
 			14, Color(1.0, 0.45, 0.85), HORIZONTAL_ALIGNMENT_LEFT)
 		l.add_theme_constant_override("outline_size", 5)
 		l.add_theme_color_override("font_outline_color", Color(0, 0, 0))
+
+
+## Called on room entry: the tag in the top bar says what kind of room this is.
+func set_room_kind(kind: String) -> void:
+	room_kind = kind
+	if _kind_label == null:
+		return
+	var style: Dictionary = KIND_STYLE.get(kind, KIND_STYLE["combat"])
+	_kind_label.text = str(style["text"])
+	_kind_label.add_theme_color_override("font_color", style["color"])
 
 
 func _update_boss() -> void:
@@ -200,7 +228,7 @@ func _update_boss() -> void:
 	var inset := minf(3.0, pct * 540.0 * 0.5)
 	_boss_fill.offset_left = inset
 	_boss_fill.offset_right = -inset
-	_boss_label.text = "THE CREATOR   %d / %d" % [ceili(boss.hp), ceili(boss.max_hp)]
+	_boss_label.text = "THE CORE   %d / %d" % [ceili(boss.hp), ceili(boss.max_hp)]
 	_boss_detail.text = boss.state_label() + ("   (invulnerable)" if boss.invulnerable else "")
 	_boss_detail.modulate = Color(0.55, 0.6, 0.85) if boss.invulnerable \
 		else Color(1.0, 0.85, 0.3)
@@ -309,14 +337,13 @@ func _build_top() -> void:
 	realm_row.add_theme_constant_override("separation", 8)
 	col.add_child(realm_row)
 
-	_realm_label = _label(realm_row, "HELL", 15, Color(1.0, 0.5, 0.35),
+	_realm_label = _label(realm_row, "RECONSTRUCTION WING", 14, Color(1.0, 0.5, 0.35),
 		HORIZONTAL_ALIGNMENT_LEFT)
 	_realm_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var spacer := Control.new()
-	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	spacer.size_flags_stretch_ratio = 2.0
-	realm_row.add_child(spacer)
+	_kind_label = _label(realm_row, "COMBAT", 13, Color(0.6, 0.7, 0.85),
+		HORIZONTAL_ALIGNMENT_CENTER)
+	_kind_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_kind_label.size_flags_stretch_ratio = 1.8
 	_label(realm_row, GameManager.difficulty_name().to_upper(), 15,
 		Color(0.65, 0.7, 0.8), HORIZONTAL_ALIGNMENT_RIGHT)
 	for child in realm_row.get_children():
@@ -426,7 +453,7 @@ func _build_boss_bar() -> void:
 	_cover(_boss_fill)
 	_boss_root.add_child(_boss_fill)
 
-	_boss_label = _label(_boss_root, "THE CREATOR", 17, Color(1, 1, 1))
+	_boss_label = _label(_boss_root, "THE CORE", 17, Color(1, 1, 1))
 	_place(_boss_label, Vector2(0, 0), Vector2(8, 1), Vector2(524, 24))
 	_boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_boss_label.add_theme_constant_override("outline_size", 5)

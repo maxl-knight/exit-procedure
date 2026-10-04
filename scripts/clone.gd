@@ -1,7 +1,7 @@
 class_name PlayerClone
 extends Enemy
 
-## The Creator's phase-2 trick: a mirror of you. Same health, same speed, same
+## The Core's phase-2 trick: a mirror of you. Same health, same speed, same
 ## punch reach, and it will dash, whirl and heal exactly the way you do.
 
 var player_target: Player
@@ -68,7 +68,7 @@ func _build_clone_visual() -> void:
 	Util.add_sphere(_arm_pivot, 0.19, Vector3(0, 0, -0.52),
 		Util.make_material(base, 0.5, 0.2), 0.03)
 
-	# A dark crown marks it as the Creator's puppet.
+	# A dark crown marks it as the Core's puppet.
 	var crown := Util.make_material(Color(0.15, 0.1, 0.2), 0.4, 0.7,
 		Color(1.0, 0.3, 0.6), 1.2)
 	for x in [-0.18, 0.0, 0.18]:

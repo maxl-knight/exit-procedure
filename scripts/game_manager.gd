@@ -7,7 +7,7 @@ signal stats_changed
 
 const SAVE_PATH := "user://save.cfg"
 
-## Rooms per realm, and the room index of the Creator's arena.
+## Rooms per realm, and the room index of The Core's arena.
 const REALM_LENGTH := 20
 const GAME_END_ROOM := REALM_LENGTH * 3
 
@@ -17,7 +17,7 @@ enum Realm { HELL, EARTH, HEAVEN }
 
 const DIFFICULTY_NAMES := ["Easy", "Normal", "Hard", "Hell"]
 const CHARACTER_NAMES := ["Brawler", "Swordsman", "Ice Mage"]
-const REALM_NAMES := ["HELL", "EARTH", "HEAVEN"]
+const REALM_NAMES := ["RECONSTRUCTION WING", "ADAPTATION FIELD", "CORE PERIMETER"]
 
 const DIFFICULTY_SETTINGS := {
 	Difficulty.EASY: {
@@ -53,6 +53,8 @@ var hell_unlocked := false
 var announce_unlock := false
 var game_beaten := false
 var endless := false
+## Opened once you choose TAKE CONTROL behind The Core. Permanent.
+var endless_admin := false
 
 ## Live inputs for the score multiplier - reset whenever a room starts.
 var room_damage := 0.0
@@ -171,7 +173,7 @@ func score() -> int:
 	return maxi(0, int(round(score_points)))
 
 
-## Called the moment the Creator falls. Only a Hard clear opens Hell.
+## Called the moment The Core falls. Only a Hard clear opens Hell.
 func beat_game() -> bool:
 	game_beaten = true
 	var unlocked := false
@@ -184,6 +186,16 @@ func beat_game() -> bool:
 	return unlocked
 
 
+## Writing an ending into the record. Only TAKE CONTROL opens Endless
+## Administration, and it stays open across every future reconstruction.
+func apply_ending(id: String) -> void:
+	ArenaMemory.note_ending(id)
+	if id == "control" and not endless_admin:
+		endless_admin = true
+		_save_unlock()
+	stats_changed.emit()
+
+
 # ----------------------------------------------------------------- save -----
 
 func _load_unlock() -> void:
@@ -191,6 +203,7 @@ func _load_unlock() -> void:
 	if cfg.load(SAVE_PATH) == OK:
 		hell_unlocked = bool(cfg.get_value("unlock", "hell",
 			bool(cfg.get_value("unlock", "secret", false))))
+		endless_admin = bool(cfg.get_value("unlock", "endless_admin", false))
 
 
 func _save_unlock() -> void:
@@ -198,4 +211,5 @@ func _save_unlock() -> void:
 	# Load first: ArenaMemory stores the story in this same file.
 	cfg.load(SAVE_PATH)
 	cfg.set_value("unlock", "hell", hell_unlocked)
+	cfg.set_value("unlock", "endless_admin", endless_admin)
 	cfg.save(SAVE_PATH)

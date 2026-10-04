@@ -4,7 +4,7 @@ extends Node3D
 ## Generates rooms infinitely along -Z, keeps the three around the player alive
 ## and frees everything else. Also owns the room schedule: which room is a
 ## challenge, which room defects you, which is a breather or a memory, and
-## which room is the Creator's arena.
+## which room is The Core's arena.
 ##
 ## Room kinds, in banner priority order (one special thing per room):
 ##   defect > milestone(boss) > elite/upgrade > adaptive > recovery >
@@ -100,9 +100,12 @@ func adaptive_for(i: int) -> String:
 
 
 ## True on the recovery rooms (every 7-9 rooms): lighter fight, no traps,
-## and reconstruction pays out when you clear it.
+## and reconstruction pays out when you clear it. Never on a realm wall -
+## the wall gets to announce itself.
 func recovery_for(i: int) -> bool:
 	if i <= 0 or GameManager.is_boss_room(i):
+		return false
+	if i > 0 and i % GameManager.REALM_LENGTH == 0:
 		return false
 	if challenge_for(i) != Room.Challenge.NONE or is_curse_room(i):
 		return false
@@ -115,6 +118,8 @@ func recovery_for(i: int) -> bool:
 ## the Arena shows you a fragment of a warrior it still remembers.
 func memory_for(i: int) -> bool:
 	if i < 5 or GameManager.is_boss_room(i):
+		return false
+	if i % GameManager.REALM_LENGTH == 0:
 		return false
 	if challenge_for(i) != Room.Challenge.NONE or is_curse_room(i):
 		return false
@@ -142,7 +147,7 @@ func _slot_walk(seed_value: int, i: int, lo: int, hi: int) -> bool:
 
 ## One label per room for banners and the HUD, in the same priority order
 ## _config_for() uses: defect > boss > elite/upgrade > adaptive > recovery >
-## memory > combat.
+## memory > milestone(realm wall) > combat.
 func kind_for(i: int) -> String:
 	if is_curse_room(i):
 		return "defect"
@@ -159,6 +164,8 @@ func kind_for(i: int) -> String:
 		return "recovery"
 	if memory_for(i):
 		return "memory"
+	if i > 0 and i % GameManager.REALM_LENGTH == 0:
+		return "milestone"
 	return "combat"
 
 
@@ -171,12 +178,10 @@ func _config_for(i: int) -> Dictionary:
 		var adaptive := adaptive_for(i)
 		if adaptive != "":
 			cfg["adaptive"] = adaptive
-		elif recovery_for(i):
-			cfg["kind"] = "recovery"
-		elif memory_for(i):
-			cfg["kind"] = "memory"
 	if GameManager.is_boss_room(i):
 		cfg["boss"] = true
+	# One resolved label per room so Room.kind and kind_for() always agree.
+	cfg["kind"] = kind_for(i)
 	return cfg
 
 
@@ -215,7 +220,7 @@ func _physics_process(_delta: float) -> void:
 	_trim(idx)
 
 
-## Only used after the Creator falls and the player chooses to descend again.
+## Only used after The Core falls and the player chooses to keep fighting.
 func descend() -> void:
 	var target_idx := current_index + 1
 	_ensure(target_idx)
@@ -236,7 +241,7 @@ func room_at(i: int) -> Room:
 	return r if r != null and is_instance_valid(r) else null
 
 
-## Alive enemies standing in a room (including the Creator's summons).
+## Alive enemies standing in a room (including The Core's summons).
 func enemies_in(i: int) -> int:
 	var r := room_at(i)
 	if r == null:

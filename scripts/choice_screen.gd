@@ -1,7 +1,8 @@
 class_name ChoiceScreen
 extends Control
 
-## Full-screen 3-choice picker used after an elite trial and for reward vaults.
+## Full-screen 3-choice picker used after an elite trial and for adaptive
+## counter-rewards. Each card carries the upgrade's line of Arena lore.
 ## Pauses the tree while it is open.
 
 signal chosen(id: String)
@@ -60,6 +61,7 @@ func _make_option(id: String) -> Button:
 	var stacks := int(_current.get(id, 0))
 	var name := str(data.get("name", id))
 	var desc := str(data.get("desc", ""))
+	var lore := str(data.get("lore", ""))
 	var color: Color = data.get("color", Color.WHITE)
 
 	var label := name
@@ -67,10 +69,14 @@ func _make_option(id: String) -> Button:
 		label += "   x%d -> x%d" % [stacks, stacks + 1]
 
 	var b := Button.new()
-	b.text = "%s\n%s" % [label, desc]
+	# Name, effect, then the Arena's one line of lore explaining the handout.
+	var body: String = "%s\n%s" % [label, desc]
+	if lore != "":
+		body += "\n" + lore
+	b.text = body
 	b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	b.custom_minimum_size = Vector2(0, 78)
-	b.add_theme_font_size_override("font_size", 19)
+	b.custom_minimum_size = Vector2(0, 104 if lore != "" else 78)
+	b.add_theme_font_size_override("font_size", 17)
 	b.add_theme_color_override("font_color", color.lerp(Color.WHITE, 0.5))
 	b.add_theme_color_override("font_hover_color", Color.WHITE)
 	b.add_theme_stylebox_override("normal", UIKit.flat(Color(0.1, 0.12, 0.18, 0.95), 8, 12))

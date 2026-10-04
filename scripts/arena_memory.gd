@@ -33,7 +33,19 @@ const LINES := {
 	"super_hoard": "ARENA: Power retained. Unusual.",
 	"record": "ARENA: New performance ceiling logged.",
 	"adapt": "ARENA: Simulation adapting.",
+	"boss": "ARENA: subject indexed. no prior record. begin.",
 }
+
+## The Core's greeting is the one line that reads your whole history: it is
+## chosen from how many times you have died across every reconstruction.
+## [minimum deaths, line]
+const BOSS_LINES := [
+	[0, "ARENA: subject indexed. no prior record. begin."],
+	[1, "THE CORE: reconstruction finished in 3.1 seconds. you came back faster than expected."],
+	[3, "THE CORE: three shapes of you on file. the third one still screams."],
+	[6, "THE CORE: pattern locked. you will fall exactly where you fell before."],
+	[10, "THE CORE: we no longer need you to try. your moves are already ours."],
+]
 
 ## Memory rooms dig up one fragment each, in order, forever. The cursor
 ## persists so the log keeps growing across reconstructions.
@@ -62,6 +74,7 @@ var death_cause := CAUSE_UNKNOWN
 var record_broken := false
 
 var _said := {}
+var _run_character := 0
 
 # ----------------------------------------------------------- story layer ----
 
@@ -69,10 +82,16 @@ var runs := 0
 var deaths := 0
 var deaths_by_cause := {}
 var char_runs := {}
+## Deaths, bucketed by which body you were wearing. Persisted so the hub can
+## show the record per warrior.
+var deaths_by_char := {}
 var highest_room := 0
 var bosses_beaten := 0
 var adaptive_seen := {}
 var fragments_seen := 0
+## Which of the three doors you last walked through: "", "escape", "destroy"
+## or "control". The record keeps it across reconstructions.
+var ending := ""
 
 
 func _ready() -> void:
@@ -83,6 +102,7 @@ func _ready() -> void:
 ## count the run and the character choice, persist immediately.
 func start_run(character: int) -> void:
 	runs += 1
+	_run_character = character
 	char_runs[character] = int(char_runs.get(character, 0)) + 1
 	dashes = 0
 	heals = 0
@@ -160,6 +180,11 @@ func note_boss() -> void:
 	_save()
 
 
+func note_ending(id: String) -> void:
+	ending = id
+	_save()
+
+
 func note_adaptive(kind: String) -> void:
 	adaptive_seen[kind] = int(adaptive_seen.get(kind, 0)) + 1
 	_save()
@@ -169,6 +194,7 @@ func note_death(cause: String) -> void:
 	death_cause = cause if KNOWN_CAUSES.has(cause) else CAUSE_UNKNOWN
 	deaths += 1
 	deaths_by_cause[death_cause] = int(deaths_by_cause.get(death_cause, 0)) + 1
+	deaths_by_char[_run_character] = int(deaths_by_char.get(_run_character, 0)) + 1
 	_save()
 
 
@@ -195,6 +221,67 @@ func next_fragment() -> String:
 ## Memory room entry: show the fragment in the voice bar.
 func speak_fragment() -> void:
 	voice.emit(next_fragment())
+
+
+# ------------------------------------------------------------ boss talk -----
+
+## The line The Core opens with, picked from the highest threshold you have
+## cleared. Returns the plain "boss" reaction when you have never died.
+func boss_line() -> String:
+	var line := str(LINES["boss"])
+	for row in BOSS_LINES:
+		if deaths >= int(row[0]):
+			line = str(row[1])
+	return line
+
+
+## Called the moment the Core's chamber opens. Once per run - it greets you,
+## then gets back to work.
+func speak_boss() -> void:
+	if _said.has("boss_greeted"):
+		return
+	_said["boss_greeted"] = true
+	voice.emit(boss_line())
+
+
+# -------------------------------------------------------------- hub talk -----
+
+## The line the main menu opens with. Chosen from the record, never random -
+## this is the Arena noticing you before you press play.
+func menu_line() -> String:
+	if runs <= 0:
+		return "ARENA: no reconstruction on file. the chamber is cold."
+	match ending:
+		"escape":
+			return "ARENA: subject walked out. the doors stay open."
+		"destroy":
+			return "ARENA: record destroyed. re-indexing from nothing."
+		"control":
+			return "ARENA: chair occupied. the Arena administers itself."
+	if bosses_beaten > 0:
+		return "ARENA: the Core has been broken %d time%s. it is expecting you." \
+			% [bosses_beaten, "" if bosses_beaten == 1 else "s"]
+	if highest_room >= 20:
+		return "ARENA: you reached the Adaptation Field. i have notes on you."
+	if highest_room >= 5:
+		return "ARENA: %d reconstruction%s logged. your pattern is forming." \
+			% [runs, "" if runs == 1 else "s"]
+	return "ARENA: %d reconstruction%s logged. begin when ready." \
+		% [runs, "" if runs == 1 else "s"]
+
+
+## The Core's projection panel text - a small piece of the boss in the menu.
+func menu_projection() -> String:
+	if bosses_beaten <= 0:
+		return "THE CORE: projection unavailable.\nsubject has not arrived."
+	if ending == "control":
+		return "THE CORE: projection archived.\nthe chair is occupied. by you."
+	if ending == "destroy":
+		return "THE CORE: projection corrupt.\nfile rebuilt from nothing."
+	if ending == "escape":
+		return "THE CORE: projection tracking.\nthe doors did not close."
+	return "THE CORE: projection stable.\nyou broke it %d time%s." \
+		% [bosses_beaten, "" if bosses_beaten == 1 else "s"]
 
 
 # ----------------------------------------------------------- death text -----
@@ -247,10 +334,12 @@ func _load() -> void:
 	deaths = int(cfg.get_value("story", "deaths", 0))
 	deaths_by_cause = cfg.get_value("story", "deaths_by_cause", {})
 	char_runs = cfg.get_value("story", "char_runs", {})
+	deaths_by_char = cfg.get_value("story", "deaths_by_char", {})
 	highest_room = int(cfg.get_value("story", "highest_room", 0))
 	bosses_beaten = int(cfg.get_value("story", "bosses_beaten", 0))
 	adaptive_seen = cfg.get_value("story", "adaptive_seen", {})
 	fragments_seen = int(cfg.get_value("story", "fragments_seen", 0))
+	ending = str(cfg.get_value("story", "ending", ""))
 
 
 ## Load-then-merge: the [unlock] section written by GameManager must survive.
@@ -261,8 +350,10 @@ func _save() -> void:
 	cfg.set_value("story", "deaths", deaths)
 	cfg.set_value("story", "deaths_by_cause", deaths_by_cause)
 	cfg.set_value("story", "char_runs", char_runs)
+	cfg.set_value("story", "deaths_by_char", deaths_by_char)
 	cfg.set_value("story", "highest_room", highest_room)
 	cfg.set_value("story", "bosses_beaten", bosses_beaten)
 	cfg.set_value("story", "adaptive_seen", adaptive_seen)
 	cfg.set_value("story", "fragments_seen", fragments_seen)
+	cfg.set_value("story", "ending", ending)
 	cfg.save(SAVE_PATH)

@@ -1,8 +1,9 @@
 class_name VictoryScreen
 extends Control
 
-## Shown the moment The Creator falls: final score plus the choice to keep the
-## run going by falling out of Heaven and back into Hell.
+## Shown once you have walked through a door behind The Core: final score,
+## the ending you chose, and - if you took the chair - the way to shatter
+## containment and keep fighting your way back down through the wings.
 
 signal descend
 signal to_menu
@@ -24,10 +25,14 @@ func show_stats() -> void:
 	UIKit.dim(self, Color(0.02, 0.01, 0.05, 0.86))
 	var col := UIKit.centered_column(self, 14)
 
-	var title := UIKit.small_label(col, "YOU HAVE ASCENDED", 52, Color(1.0, 0.9, 0.5))
+	var title := UIKit.small_label(col, "THE CORE FALLS", 52, Color(1.0, 0.9, 0.5))
 	UIKit.outline(title, 10)
+
+	var ending_id := ArenaMemory.ending
+	var data: Dictionary = Content.ENDINGS.get(ending_id, {})
 	var sub := UIKit.small_label(col,
-		"Hell, Earth and Heaven are behind you.", 18, Color(0.78, 0.8, 0.9))
+		str(data.get("result", "The three wings are behind you. The record is yours.")),
+		18, Color(0.78, 0.8, 0.9))
 	UIKit.outline(sub, 5)
 
 	var stats_box := UIKit.panel(Color(0.07, 0.08, 0.13, 0.95), 12, 20)
@@ -40,6 +45,10 @@ func show_stats() -> void:
 	UIKit.small_label(stats_col, "kills %d     rooms cleared %d     difficulty %s" % [
 		GameManager.kills, GameManager.rooms_cleared, GameManager.difficulty_name()],
 		17, Color(0.7, 0.74, 0.84))
+	if data.size() > 0:
+		var end_line := UIKit.small_label(stats_col,
+			"ending   %s" % str(data["title"]), 17, Color(data["color"]))
+		UIKit.outline(end_line, 5)
 
 	if GameManager.announce_unlock:
 		GameManager.announce_unlock = false
@@ -49,10 +58,19 @@ func show_stats() -> void:
 		UIKit.small_label(col, "Hell was sealed behind a Hard clear. It is open now.",
 			15, Color(0.8, 0.6, 0.6))
 
-	_descend_button = UIKit.button("FALL FROM HEAVEN  -  keep fighting for score",
-		20, Color(0.5, 0.1, 0.12), Color(0.7, 0.16, 0.18), Color(0.9, 0.3, 0.25),
-		Vector2(520, 56))
-	_descend_button.pressed.connect(_on_descend)
+	# Endless Administration is what taking the chair buys you - until then the
+	# door is visible but shut, so the unlock reads as an unlock.
+	if GameManager.endless_admin:
+		_descend_button = UIKit.button("BREAK CONTAINMENT  -  keep fighting for score",
+			20, Color(0.5, 0.1, 0.12), Color(0.7, 0.16, 0.18), Color(0.9, 0.3, 0.25),
+			Vector2(520, 56))
+		_descend_button.pressed.connect(_on_descend)
+	else:
+		_descend_button = UIKit.button(
+			"BREAK CONTAINMENT  -  sealed until you TAKE CONTROL",
+			17, Color(0.12, 0.13, 0.17), Color(0.15, 0.16, 0.21), Color(0.18, 0.19, 0.24),
+			Vector2(520, 48))
+		_descend_button.disabled = true
 	col.add_child(_descend_button)
 
 	var menu := UIKit.button("MAIN MENU", 20)
